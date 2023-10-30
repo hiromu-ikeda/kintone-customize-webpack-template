@@ -1,18 +1,19 @@
-const path = require('path');
-const glob = require('glob');
-const {exec} = require('child_process');
-const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+const path = require("path")
+const glob = require("glob")
+const { exec } = require("child_process")
+const ForkTsCheckerWebpackPlugin = require("fork-ts-checker-webpack-plugin")
+const autoUploadPlugin = require("./autoUpload")
 
-const basePath = path.resolve('src', 'apps');
+const basePath = path.resolve("src", "apps")
 
 // basePath配下の各ディレクトリを複数のentryとする
-const entries = glob.sync('**/index.+(js|ts|tsx)', {cwd: basePath}).reduce(
+const entries = glob.sync("**/index.+(js|ts|tsx)", { cwd: basePath }).reduce(
   (prev, file) => ({
     ...prev,
     [path.dirname(file)]: path.resolve(basePath, file),
   }),
   {}
-);
+)
 
 module.exports = {
   entry: entries,
@@ -22,13 +23,13 @@ module.exports = {
         test: /\.m?js$/,
         exclude: /node_modules/,
         use: {
-          loader: 'babel-loader',
+          loader: "babel-loader",
           options: {
             presets: [
               [
-                '@babel/preset-env',
+                "@babel/preset-env",
                 {
-                  useBuiltIns: 'usage',
+                  useBuiltIns: "usage",
                   corejs: 3,
                 },
               ],
@@ -38,53 +39,54 @@ module.exports = {
       },
       {
         test: /\.tsx?$/,
-        loader: 'ts-loader',
+        loader: "ts-loader",
         exclude: /node_modules/,
         options: {
-          transpileOnly: true
-        }
-      }
+          transpileOnly: true,
+        },
+      },
     ],
   },
   output: {
-    path: path.resolve(__dirname, 'dist'),
-    filename: '[name].js',
+    path: path.resolve(__dirname, "dist"),
+    filename: "[name].js",
   },
   plugins: [
+    new autoUploadPlugin(),
     new ForkTsCheckerWebpackPlugin(),
     {
       // watchモードのとき再ビルドされたものをアップロードする
       apply: (compiler) => {
         compiler.hooks.afterEmit.tapPromise(
-          'upload javascript files',
+          "upload javascript files",
           (compilation) => {
-            if (!compiler.options.watch) return Promise.resolve();
+            if (!compiler.options.watch) return Promise.resolve()
 
             const emittedFiles = Object.keys(compilation.assets)
               .filter((file) => {
-                const source = compilation.assets[file];
-                return source.emitted && source.existsAt;
+                const source = compilation.assets[file]
+                return source.emitted && source.existsAt
               })
-              .map((file) => file.replace('.js', ''));
+              .map((file) => file.replace(".js", ""))
 
             const processes = glob
-              .sync(`@(${emittedFiles.join('|')})/customize-manifest.json`, {
+              .sync(`@(${emittedFiles.join("|")})/customize-manifest.json`, {
                 cwd: basePath,
               })
               .map((file) => {
-                console.log('\nuploading... ', file);
+                console.log("\nuploading... ", file)
                 return exec(
                   `yarn upload ${path.resolve(basePath, file)}`,
                   (err, stdout, stderr) => {
-                    if (stdout) process.stdout.write(stdout);
-                    if (stderr) process.stderr.write(stderr);
+                    if (stdout) process.stdout.write(stdout)
+                    if (stderr) process.stderr.write(stderr)
                   }
-                );
-              });
-            return Promise.all(processes);
+                )
+              })
+            return Promise.all(processes)
           }
-        );
+        )
       },
     },
   ],
-};
+}
